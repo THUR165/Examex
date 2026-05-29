@@ -1,0 +1,13 @@
+# Python
+**/venv/
+**/*.pyc
+**/__pycache__/
+**/.env
+
+# JavaScript
+**/node_modules/
+**/.next/
+**/dist/
+
+# Banco de dados local
+**/*.sqlite3
