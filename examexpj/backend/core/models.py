@@ -6,6 +6,10 @@ class Usuario(AbstractUser):
     is_professor = models.BooleanField(default=False)
     is_aluno = models.BooleanField(default=True)
 
+    def __str__(self):
+        tipo = "Professor" if self.is_professor else "Aluno"
+        return f"{self.username} ({tipo})"
+
 # 2. Estrutura de Matérias (1FN, 2FN, 3FN para evitar duplicidade)
 class Disciplina(models.Model):
     nome = models.CharField(max_length=100, unique=True) # Ex: Cálculo I, Estatística
