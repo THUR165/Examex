@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Questao, Topico, Disciplina
+from .models import Questao, Topico, Disciplina, Simulado
 
 class DisciplinaSerializer(serializers.ModelSerializer):
     class Meta:
@@ -20,3 +20,9 @@ class QuestaoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Questao
         fields = ['id', 'topico', 'enunciado', 'tipo', 'resposta_correta', 'peso']
+
+class SimuladoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Simulado
+        fields = ['id', 'titulo', 'data_criacao', 'finalizado', 'nota_final', 'questoes']
+        depth = 1
