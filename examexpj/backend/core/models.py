@@ -42,3 +42,25 @@ class Alternativa(models.Model):
 
     def __str__(self):
         return f"{self.letra}) {self.texto[:30]}"
+    
+class Simulado(models.Model):
+    aluno = models.ForeignKey(Usuario, on_delete=models.CASCADE, related_name='simulados')
+    titulo = models.CharField(max_length=200, default="Simulado Gerado")
+    data_criacao = models.DateTimeField(auto_now_add=True)
+    questoes = models.ManyToManyField(Questao, related_name='simulados_presentes')
+    finalizado = models.BooleanField(default=False)
+    nota_final = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.titulo} - {self.aluno.username} ({self.data_criacao.strftime('%d/%m/%Y')})"
+
+
+class RespostaAluno(models.Model):
+    simulado = models.ForeignKey(Simulado, on_delete=models.CASCADE, related_name='respostas')
+    questao = models.ForeignKey(Questao, on_delete=models.CASCADE)
+    alternativa_marcada = models.ForeignKey(Alternativa, on_delete=models.CASCADE, null=True, blank=True)
+    texto_resposta = models.TextField(null=True, blank=True) # Caso a questão seja discursiva
+    esta_correta = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Resposta de {self.simulado.aluno.username} - Questão {self.questao.id}"

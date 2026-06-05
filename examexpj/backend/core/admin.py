@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import Usuario, Disciplina, Topico, Questao, Alternativa
+from .models import Usuario, Disciplina, Topico, Questao, Alternativa, Simulado, RespostaAluno
 
 admin.site.register(Usuario, UserAdmin)
 admin.site.register(Disciplina)
@@ -14,3 +14,5 @@ class QuestaoAdmin(admin.ModelAdmin):
     inlines = [AlternativaInline]
 
 admin.site.register(Questao, QuestaoAdmin)
+admin.site.register(Simulado)
+admin.site.register(RespostaAluno)
