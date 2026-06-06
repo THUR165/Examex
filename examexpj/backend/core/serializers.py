@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import Questao, Topico, Disciplina, Simulado
+from .models import Questao, Topico, Disciplina, Simulado, Alternativa
 
 class DisciplinaSerializer(serializers.ModelSerializer):
     class Meta:
@@ -15,12 +15,18 @@ class TopicoSerializer(serializers.ModelSerializer):
         fields = ['id', 'nome', 'disciplina']
 
 class QuestaoSerializer(serializers.ModelSerializer):
-    # Opcional: traz os dados do tópico aninhados na resposta
-    topico = TopicoSerializer(read_only=True) 
+    alternativas = AlternativaSerializer(many=True, source='alternativa_set')
 
     class Meta:
         model = Questao
-        fields = ['id', 'topico', 'enunciado', 'tipo', 'resposta_correta', 'peso']
+        fields = ['id', 'enunciado', 'topico', 'tipo', 'peso', 'alternativas']
+
+    def create(self, validated_data):
+        alternativas_data = validated_data.pop('alternativa_set', [])
+        questao = Questao.objects.create(**validated_data)
+        for alt_data in alternativas_data:
+            Alternativa.objects.create(questao=questao, **alt_data) 
+        return questao
 
 class SimuladoSerializer(serializers.ModelSerializer):
     class Meta:
@@ -36,3 +42,9 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         data['username'] = self.user.username
         
         return data
+    
+class AlternativaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Alternativa
+        # Não incluímos 'questao' aqui porque ela será preenchida automaticamente
+        fields = ['id', 'texto', 'is_correta']

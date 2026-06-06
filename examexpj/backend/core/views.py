@@ -1,24 +1,18 @@
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
-from .models import Questao
-from .serializers import QuestaoSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
-from .models import Simulado
-from .services import MotorDeSimulados, GeracaoAleatoriaStrategy
-from .serializers import QuestaoSerializer, SimuladoSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
-from .serializers import CustomTokenObtainPairSerializer
+from .models import Questao, Simulado
+from .serializers import QuestaoSerializer, SimuladoSerializer, CustomTokenObtainPairSerializer
+from .services import MotorDeSimulados, GeracaoAleatoriaStrategy
+from .permissions import IsProfessorOrReadOnly
 
-class QuestaoListView(generics.ListAPIView):
+class QuestaoListView(generics.ListCreateAPIView):
     queryset = Questao.objects.all()
     serializer_class = QuestaoSerializer
-    
-    # Essa linha protege a rota: só quem tem o Token JWT consegue ver as questões
-    permission_classes = [IsAuthenticated] 
+    permission_classes = [IsProfessorOrReadOnly] 
 
-    # Opcional: Filtro rápido para buscar questões por tópico na URL
     def get_queryset(self):
         queryset = super().get_queryset()
         topico_id = self.request.query_params.get('topico')
