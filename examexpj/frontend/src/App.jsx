@@ -1,17 +1,15 @@
-// frontend/src/App.jsx
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import DashboardProfessor from './pages/DashboardProfessor';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Rota inicial: Tela de Login */}
         <Route path="/" element={<Login />} />
-        
-        {/* Rota protegida: Painel de Estudos */}
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/professor" element={<DashboardProfessor />} />
       </Routes>
     </BrowserRouter>
   );

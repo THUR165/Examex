@@ -13,8 +13,15 @@ export default function Login() {
         setErro('');
         try {
             const response = await api.post('token/', { username, password });
+            
             localStorage.setItem('token', response.data.access);
-            navigate('/dashboard');
+            localStorage.setItem('is_professor', response.data.is_professor);
+
+            if (response.data.is_professor === true) {
+                navigate('/professor');
+            } else {
+                navigate('/dashboard');
+            }
         } catch (error) {
             setErro('Credenciais inválidas. Tente novamente.');
         }
