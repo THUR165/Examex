@@ -8,6 +8,8 @@ from rest_framework import status
 from .models import Simulado
 from .services import MotorDeSimulados, GeracaoAleatoriaStrategy
 from .serializers import QuestaoSerializer, SimuladoSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import CustomTokenObtainPairSerializer
 
 class QuestaoListView(generics.ListAPIView):
     queryset = Questao.objects.all()
@@ -33,3 +35,6 @@ class GerarSimuladoView(APIView):
         simulado = motor.criar_prova(aluno=aluno, quantidade_questoes=5)
         serializer = SimuladoSerializer(simulado)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer

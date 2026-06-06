@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import Questao, Topico, Disciplina, Simulado
 
 class DisciplinaSerializer(serializers.ModelSerializer):
@@ -26,3 +27,12 @@ class SimuladoSerializer(serializers.ModelSerializer):
         model = Simulado
         fields = ['id', 'titulo', 'data_criacao', 'finalizado', 'nota_final', 'questoes']
         depth = 1
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        
+        data['is_professor'] = self.user.is_professor
+        data['username'] = self.user.username
+        
+        return data
