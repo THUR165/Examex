@@ -14,18 +14,30 @@ class TopicoSerializer(serializers.ModelSerializer):
         model = Topico
         fields = ['id', 'nome', 'disciplina']
 
+# 1. Movido para cima! O Python agora lê isso aqui primeiro.
+class AlternativaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Alternativa
+        # Usando os campos exatos do seu model
+        fields = ['id', 'letra', 'texto']
+
+# 2. Agora o QuestaoSerializer pode usar o AlternativaSerializer sem problemas.
 class QuestaoSerializer(serializers.ModelSerializer):
-    alternativas = AlternativaSerializer(many=True, source='alternativa_set')
+    # O nome da variável é igual ao related_name do seu models.py
+    alternativas = AlternativaSerializer(many=True)
 
     class Meta:
         model = Questao
-        fields = ['id', 'enunciado', 'topico', 'tipo', 'peso', 'alternativas']
+        # Adicionamos o 'resposta_correta' aqui!
+        fields = ['id', 'enunciado', 'topico', 'tipo', 'peso', 'resposta_correta', 'alternativas']
 
     def create(self, validated_data):
-        alternativas_data = validated_data.pop('alternativa_set', [])
+        alternativas_data = validated_data.pop('alternativas', [])
         questao = Questao.objects.create(**validated_data)
+        
         for alt_data in alternativas_data:
             Alternativa.objects.create(questao=questao, **alt_data) 
+            
         return questao
 
 class SimuladoSerializer(serializers.ModelSerializer):
@@ -37,14 +49,6 @@ class SimuladoSerializer(serializers.ModelSerializer):
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
-        
         data['is_professor'] = self.user.is_professor
         data['username'] = self.user.username
-        
         return data
-    
-class AlternativaSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Alternativa
-        # Não incluímos 'questao' aqui porque ela será preenchida automaticamente
-        fields = ['id', 'texto', 'is_correta']
