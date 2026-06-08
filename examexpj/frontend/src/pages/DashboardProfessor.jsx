@@ -107,8 +107,10 @@ export default function DashboardProfessor() {
                         <p className="text-gray-500">Gerencie suas questões e monte novas provas.</p>
                     </div>
                     <div className="flex gap-2">
-                        <button onClick={() => setAbaAtiva('montar_prova')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition shadow-md">
-                            Montar Prova
+                        <button 
+                        onClick={() => setAbaAtiva(abaAtiva === 'montar_prova' ? 'estatisticas' : 'montar_prova')}
+                        className={`${abaAtiva === 'montar_prova' ? 'bg-gray-500 hover:bg-gray-600' : 'bg-indigo-600 hover:bg-indigo-700'} text-white font-bold py-2 px-4 rounded-lg transition shadow-md`}>
+                            {abaAtiva === 'montar_prova' ? 'Cancelar' : 'Montar Prova'}
                         </button>
                         <button onClick={() => setAbaAtiva(abaAtiva === 'nova_questao' ? 'estatisticas' : 'nova_questao')} className={`${abaAtiva === 'nova_questao' ? 'bg-gray-500 hover:bg-gray-600' : 'bg-emerald-600 hover:bg-emerald-700'} text-white font-bold py-2 px-4 rounded-lg transition shadow-md`}>
                             {abaAtiva === 'nova_questao' ? 'Cancelar' : '+ Nova Questão'}
