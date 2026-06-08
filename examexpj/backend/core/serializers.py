@@ -41,10 +41,11 @@ class QuestaoSerializer(serializers.ModelSerializer):
         return questao
 
 class SimuladoSerializer(serializers.ModelSerializer):
+    questoes = QuestaoSerializer(many=True, read_only=True) 
+
     class Meta:
         model = Simulado
         fields = ['id', 'titulo', 'data_criacao', 'finalizado', 'nota_final', 'questoes']
-        depth = 1
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
