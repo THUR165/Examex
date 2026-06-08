@@ -4,13 +4,12 @@ from .models import Questao, Simulado
 
 class GeracaoSimuladoStrategy(ABC):
     @abstractmethod
-    def gerar(self, aluno, quantidade_questoes):
+    def gerar(self, aluno, **kwargs):
         pass
 
 class GeracaoAleatoriaStrategy(GeracaoSimuladoStrategy):
-    def gerar(self, aluno, quantidade_questoes=5):
+    def gerar(self, aluno, quantidade_questoes=5, **kwargs):
         todas_questoes = list(Questao.objects.all())
-        
         if len(todas_questoes) < quantidade_questoes:
             questoes_sorteadas = todas_questoes
         else:
@@ -20,9 +19,25 @@ class GeracaoAleatoriaStrategy(GeracaoSimuladoStrategy):
             aluno=aluno,
             titulo=f"Simulado Aleatório - {len(questoes_sorteadas)} Questões"
         )
-        
         simulado.questoes.set(questoes_sorteadas)
+        return simulado
+
+# --- NOVA ESTRATÉGIA ADICIONADA ---
+class MontagemManualStrategy(GeracaoSimuladoStrategy):
+    def gerar(self, aluno, **kwargs):
+        # Recebemos os IDs exatos e o título que o professor escolheu no React
+        questoes_ids = kwargs.get('questoes_ids', [])
+        titulo = kwargs.get('titulo', "Prova Oficial")
         
+        # Busca no banco apenas as questões selecionadas
+        questoes = Questao.objects.filter(id__in=questoes_ids)
+        
+        simulado = Simulado.objects.create(
+            aluno=aluno,
+            titulo=titulo
+        )
+        
+        simulado.questoes.set(questoes)
         return simulado
 
 class MotorDeSimulados:
@@ -32,5 +47,5 @@ class MotorDeSimulados:
     def set_strategy(self, strategy: GeracaoSimuladoStrategy):
         self._strategy = strategy
 
-    def criar_prova(self, aluno, quantidade_questoes):
-        return self._strategy.gerar(aluno, quantidade_questoes)
+    def criar_prova(self, aluno, **kwargs):
+        return self._strategy.gerar(aluno, **kwargs)
