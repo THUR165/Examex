@@ -4,10 +4,24 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import Questao, Simulado, Alternativa, RespostaAluno, Usuario, Turma
-from .serializers import QuestaoSerializer, SimuladoSerializer, CustomTokenObtainPairSerializer, TurmaSerializer
+from .serializers import QuestaoSerializer, SimuladoSerializer, CustomTokenObtainPairSerializer, TurmaSerializer, RespostaPendenteSerializer
 from .permissions import IsProfessorOrReadOnly
 from django.shortcuts import get_object_or_404
 from .services import MotorDeSimulados, GeracaoAleatoriaStrategy, MontagemManualStrategy
+
+class RespostasPendentesListView(generics.ListAPIView):
+    permission_classes = [IsProfessorOrReadOnly]
+    serializer_class = RespostaPendenteSerializer
+
+    def get_queryset(self):
+        # Filtra respostas de texto (DI) que ainda não têm nota, 
+        # de simulados já finalizados, que pertencem às turmas do professor logado
+        return RespostaAluno.objects.filter(
+            questao__tipo='DI',
+            nota_atribuida__isnull=True,
+            simulado__finalizado=True,
+            simulado__turma__professor=self.request.user
+        )
 
 class QuestaoListView(generics.ListCreateAPIView):
     queryset = Questao.objects.all()
@@ -99,24 +113,34 @@ class FinalizarSimuladoView(APIView):
         
         soma_pesos_certas = 0.0
         soma_pesos_total = 0.0
+        tem_discursiva = False # Flag para avisar o aluno que a nota não é definitiva
         
         for questao in simulado.questoes.all():
             soma_pesos_total += questao.peso
+            resposta_aluno = respostas_enviadas.get(str(questao.id))
             
-            alternativa_id = respostas_enviadas.get(str(questao.id))
             alternativa_marcada = None
+            texto_resposta = None
             correta = False
             
-            if alternativa_id:
-                alternativa_marcada = get_object_or_404(Alternativa, pk=alternativa_id, questao=questao)
-                if alternativa_marcada.letra == questao.resposta_correta:
-                    correta = True
-                    soma_pesos_certas += questao.peso
+            if questao.tipo == 'ME':
+                if resposta_aluno:
+                    alternativa_marcada = get_object_or_404(Alternativa, pk=int(resposta_aluno), questao=questao)
+                    if alternativa_marcada.letra == questao.resposta_correta:
+                        correta = True
+                        soma_pesos_certas += questao.peso
+
+            # --- ARMAZENAMENTO MANUAL (DISCURSIVA) ---
+            elif questao.tipo == 'DI':
+                tem_discursiva = True
+                texto_resposta = resposta_aluno # Guarda o texto digitado pelo aluno
+                # Não somamos aos pesos certos ainda. O professor fará isso depois.
 
             RespostaAluno.objects.create(
                 simulado=simulado,
                 questao=questao,
                 alternativa_marcada=alternativa_marcada,
+                texto_resposta=texto_resposta,
                 esta_correta=correta
             )
             
@@ -129,7 +153,51 @@ class FinalizarSimuladoView(APIView):
         simulado.nota_final = nota_calculada
         simulado.save()
 
-        return Response({
+        resultado = {
             "mensagem": "Simulado finalizado com sucesso!",
             "nota_final": simulado.nota_final
-        }, status=status.HTTP_200_OK)
+        }
+        
+        if tem_discursiva:
+            resultado["aviso"] = "Sua prova possui questões discursivas. A sua nota atual é parcial e está aguardando a correção manual do professor."
+
+        return Response(resultado, status=status.HTTP_200_OK)
+
+
+class CorrigirRespostaView(APIView):
+    permission_classes = [IsProfessorOrReadOnly]
+
+    def post(self, request, pk):
+        # Busca a resposta garantindo que ela é de um aluno da turma deste professor
+        resposta = get_object_or_404(RespostaAluno, pk=pk, simulado__turma__professor=request.user)
+        nota_dada = float(request.data.get('nota', 0))
+        
+        if nota_dada < 0 or nota_dada > resposta.questao.peso:
+            return Response({"erro": f"A nota deve estar entre 0 e {resposta.questao.peso}"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Salva a nota manual na resposta
+        resposta.nota_atribuida = nota_dada
+        resposta.esta_correta = (nota_dada > 0)
+        resposta.save()
+
+        # RECALCULA A NOTA FINAL DA PROVA INTEIRA DO ALUNO
+        simulado = resposta.simulado
+        soma_pesos_certas = 0.0
+        soma_pesos_total = 0.0
+        
+        for r in simulado.respostas.all():
+            soma_pesos_total += r.questao.peso
+            
+            if r.questao.tipo == 'ME' and r.esta_correta:
+                soma_pesos_certas += r.questao.peso
+            elif r.questao.tipo == 'DI' and r.nota_atribuida is not None:
+                soma_pesos_certas += r.nota_atribuida # Soma a nota fracionada do professor
+
+        if soma_pesos_total > 0:
+            simulado.nota_final = (soma_pesos_certas / soma_pesos_total) * 10
+        else:
+            simulado.nota_final = 0
+        
+        simulado.save()
+
+        return Response({"mensagem": "Correção aplicada e nota final da prova recalculada!"}, status=status.HTTP_200_OK)
