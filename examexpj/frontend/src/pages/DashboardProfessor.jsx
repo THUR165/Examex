@@ -9,15 +9,19 @@ export default function DashboardProfessor() {
     // Estados Gerais
     const [todasQuestoes, setTodasQuestoes] = useState([]);
     const [turmas, setTurmas] = useState([]);
+    
+    // --- ESTADOS DE CORREÇÃO ---
+    const [correcoesPendentes, setCorrecoesPendentes] = useState([]);
+    const [notasAtribuidas, setNotasAtribuidas] = useState({});
 
-    // Estados do Formulário de Questão (Compartilhado/Reutilizado)
+    // Estados do Formulário de Questão
     const [enunciado, setEnunciado] = useState('');
     const [peso, setPeso] = useState(1);
     const [topicoId, setTopicoId] = useState(1);
-    const [tipoQuestao, setTipoQuestao] = useState('ME'); // 'ME' ou 'DI'
-    const [isPublica, setIsPublica] = useState(true); // Pública (Treino) ou Sigilosa (Prova)
-    const [respostaDiscursiva, setRespostaDiscursiva] = useState(''); // Para tipo 'DI'
-    const [respostaCorretaME, setRespostaCorretaME] = useState('A'); // Para tipo 'ME'
+    const [tipoQuestao, setTipoQuestao] = useState('ME'); 
+    const [isPublica, setIsPublica] = useState(true); 
+    const [respostaDiscursiva, setRespostaDiscursiva] = useState(''); 
+    const [respostaCorretaME, setRespostaCorretaME] = useState('A'); 
     const [alternativas, setAlternativas] = useState([
         { letra: 'A', texto: '' }, { letra: 'B', texto: '' },
         { letra: 'C', texto: '' }, { letra: 'D', texto: '' },
@@ -39,6 +43,10 @@ export default function DashboardProfessor() {
             
             const resTurmas = await api.get('turmas/', { headers });
             setTurmas(resTurmas.data);
+            
+            const resCorrecoes = await api.get('correcoes/pendentes/', { headers });
+            setCorrecoesPendentes(resCorrecoes.data);
+            
         } catch (error) {
             console.error("Erro ao buscar dados:", error);
         }
@@ -60,10 +68,8 @@ export default function DashboardProfessor() {
         setAlternativas(novasAlternativas);
     };
 
-    // Função única para salvar questões no banco de dados
     const salvarQuestaoNoBanco = async (forcarSigilosa = false) => {
         const token = localStorage.getItem('token');
-        
         const payload = {
             enunciado,
             peso: parseFloat(peso),
@@ -78,7 +84,6 @@ export default function DashboardProfessor() {
             headers: { Authorization: `Bearer ${token}` }
         });
         
-        // Limpa o formulário de questões
         setEnunciado('');
         setRespostaDiscursiva('');
         setPeso(1);
@@ -100,11 +105,8 @@ export default function DashboardProfessor() {
     const handleCriarQuestaoCriacaoProva = async (e) => {
         e.preventDefault();
         try {
-            // Cria a questão forçando is_publica = false (Sigilosa)
             const novaQuestao = await salvarQuestaoNoBanco(true);
             alert('Questão sigilosa criada e adicionada à lista!');
-            
-            // Atualiza a lista local de questões e marca a nova automaticamente
             setTodasQuestoes(prev => [novaQuestao, ...prev]);
             setQuestoesSelecionadas(prev => [...prev, novaQuestao.id]);
             setCriandoQuestaoNaProva(false);
@@ -121,22 +123,12 @@ export default function DashboardProfessor() {
 
     const handleSalvarProva = async (e) => {
         e.preventDefault();
-        if (questoesSelecionadas.length === 0) {
-            alert("Selecione ao menos uma questão!");
-            return;
-        }
-        if (!turmaSelecionada) {
-            alert("Selecione uma turma para enviar a prova!");
-            return;
-        }
+        if (questoesSelecionadas.length === 0) return alert("Selecione ao menos uma questão!");
+        if (!turmaSelecionada) return alert("Selecione uma turma para enviar a prova!");
         
         try {
             const token = localStorage.getItem('token');
-            const payload = { 
-                titulo: tituloProva, 
-                questoes_ids: questoesSelecionadas,
-                turma_id: turmaSelecionada
-            };
+            const payload = { titulo: tituloProva, questoes_ids: questoesSelecionadas, turma_id: turmaSelecionada };
             
             const response = await api.post('provas/montar/', payload, { 
                 headers: { Authorization: `Bearer ${token}` } 
@@ -152,6 +144,29 @@ export default function DashboardProfessor() {
         }
     };
 
+    const handleSalvarCorrecao = async (idResposta, pesoMaximo) => {
+        const notaStr = notasAtribuidas[idResposta];
+        const nota = parseFloat(notaStr);
+        
+        if (isNaN(nota) || nota < 0 || nota > pesoMaximo) {
+            alert(`Por favor, insira uma nota válida entre 0 e ${pesoMaximo}.`);
+            return;
+        }
+
+        try {
+            const token = localStorage.getItem('token');
+            const response = await api.post(`correcoes/${idResposta}/salvar/`, { nota: nota }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            alert(response.data.mensagem);
+            setNotasAtribuidas(prev => { const novas = {...prev}; delete novas[idResposta]; return novas; });
+            fetchDados();
+        } catch (error) {
+            alert('Erro ao salvar a correção. Verifique se o valor está correto.');
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gray-50">
             <nav className="bg-slate-800 shadow-sm p-4 flex justify-between items-center">
@@ -159,13 +174,25 @@ export default function DashboardProfessor() {
                 <button onClick={handleLogout} className="text-red-400 hover:text-red-300 font-medium text-sm">Sair</button>
             </nav>
 
-            <main className="max-w-4xl mx-auto mt-8 p-4">
+            <main className="max-w-5xl mx-auto mt-8 p-4">
                 <div className="flex justify-between items-center mb-6">
                     <div>
                         <h2 className="text-2xl font-bold text-gray-800">Administração de Conteúdo</h2>
-                        <p className="text-gray-500">Gerencie suas questões e monte novas provas.</p>
+                        <p className="text-gray-500">Gerencie suas questões, monte provas e avalie alunos.</p>
                     </div>
                     <div className="flex gap-2">
+                        <button 
+                            onClick={() => setAbaAtiva(abaAtiva === 'correcoes' ? 'estatisticas' : 'correcoes')} 
+                            className={`relative ${abaAtiva === 'correcoes' ? 'bg-gray-500 hover:bg-gray-600' : 'bg-amber-500 hover:bg-amber-600'} text-white font-bold py-2 px-4 rounded-lg transition shadow-md`}
+                        >
+                            {abaAtiva === 'correcoes' ? 'Cancelar' : 'Corrigir Provas'}
+                            {correcoesPendentes.length > 0 && abaAtiva !== 'correcoes' && (
+                                <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-black px-2 py-0.5 rounded-full shadow-sm">
+                                    {correcoesPendentes.length}
+                                </span>
+                            )}
+                        </button>
+
                         <button 
                             onClick={() => { setAbaAtiva(abaAtiva === 'montar_prova' ? 'estatisticas' : 'montar_prova'); setCriandoQuestaoNaProva(false); }} 
                             className={`${abaAtiva === 'montar_prova' ? 'bg-gray-500 hover:bg-gray-600' : 'bg-indigo-600 hover:bg-indigo-700'} text-white font-bold py-2 px-4 rounded-lg transition shadow-md`}
@@ -182,9 +209,8 @@ export default function DashboardProfessor() {
                     </div>
                 </div>
 
-                {/* ABA: ESTATÍSTICAS */}
                 {abaAtiva === 'estatisticas' && (
-                    <div className="grid grid-cols-2 gap-4 mb-8">
+                    <div className="grid grid-cols-3 gap-4 mb-8">
                         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
                             <h3 className="text-gray-500 text-sm font-medium">Minhas Turmas</h3>
                             <p className="text-3xl font-bold text-indigo-600 mt-2">{turmas.length}</p>
@@ -193,15 +219,74 @@ export default function DashboardProfessor() {
                             <h3 className="text-gray-500 text-sm font-medium">Questões no Banco</h3>
                             <p className="text-3xl font-bold text-emerald-600 mt-2">{todasQuestoes.length}</p>
                         </div>
+                        <div className="bg-amber-50 p-6 rounded-lg shadow-sm border border-amber-200">
+                            <h3 className="text-amber-800 text-sm font-medium">Aguardando Correção</h3>
+                            <p className="text-3xl font-bold text-amber-600 mt-2">{correcoesPendentes.length}</p>
+                        </div>
                     </div>
                 )}
 
-                {/* ABA: NOVA QUESTÃO GENERALIZADA */}
+                {abaAtiva === 'correcoes' && (
+                    <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100">
+                        <h3 className="text-lg font-bold text-amber-600 mb-6 border-b pb-2">Central de Avaliação Manual</h3>
+                        
+                        {correcoesPendentes.length === 0 ? (
+                            <p className="text-gray-500 italic text-center py-8">Nenhuma resposta pendente de correção no momento. Excelente trabalho!</p>
+                        ) : (
+                            <div className="space-y-6">
+                                {correcoesPendentes.map((resp) => (
+                                    <div key={resp.id} className="bg-gray-50 rounded-lg border border-gray-200 p-6">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div>
+                                                <h4 className="text-lg font-bold text-slate-800">{resp.aluno_nome} <span className="text-sm font-normal text-gray-500">- {resp.simulado_titulo}</span></h4>
+                                                <p className="text-gray-700 font-medium mt-2">P: {resp.questao_enunciado}</p>
+                                            </div>
+                                            <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded">
+                                                Valendo: {resp.peso_maximo} pts
+                                            </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4 mb-4">
+                                            <div className="bg-white p-3 rounded border border-gray-200">
+                                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Gabarito do Professor</p>
+                                                <p className="text-sm text-gray-600 italic">{resp.questao_gabarito}</p>
+                                            </div>
+                                            <div className="bg-white p-3 rounded border border-blue-200 shadow-sm">
+                                                <p className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-1">Resposta do Aluno</p>
+                                                <p className="text-sm text-gray-800">{resp.texto_resposta || "(Deixou em branco)"}</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-3 justify-end border-t border-gray-200 pt-4 mt-2">
+                                            <label className="text-sm font-bold text-gray-700">Atribuir Nota:</label>
+                                            <input 
+                                                type="number" 
+                                                min="0" 
+                                                max={resp.peso_maximo} 
+                                                step="0.1" 
+                                                placeholder={`Ex: ${resp.peso_maximo}`}
+                                                className="w-24 px-3 py-1.5 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500 outline-none"
+                                                value={notasAtribuidas[resp.id] || ''}
+                                                onChange={(e) => setNotasAtribuidas({...notasAtribuidas, [resp.id]: e.target.value})}
+                                            />
+                                            <button 
+                                                onClick={() => handleSalvarCorrecao(resp.id, resp.peso_maximo)}
+                                                className="bg-amber-500 hover:bg-amber-600 text-white font-bold py-1.5 px-4 rounded transition"
+                                            >
+                                                Salvar Nota
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {abaAtiva === 'nova_questao' && (
                     <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100">
                         <h3 className="text-lg font-bold text-gray-800 mb-6 border-b pb-2">Cadastrar Nova Questão</h3>
                         <form onSubmit={handleSalvarQuestaoAbaPropria} className="flex flex-col gap-5">
-                            
                             <div className="grid grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Questão</label>
@@ -222,12 +307,10 @@ export default function DashboardProfessor() {
                                     <input type="number" required min="0.1" step="0.1" className="w-full px-3 py-2 border rounded-lg" value={peso} onChange={(e) => setPeso(e.target.value)} />
                                 </div>
                             </div>
-
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">ID do Tópico</label>
                                 <input type="number" required min="1" className="w-full px-3 py-2 border rounded-lg" value={topicoId} onChange={(e) => setTopicoId(e.target.value)} />
                             </div>
-
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Enunciado da Questão</label>
                                 <textarea required className="w-full px-4 py-2 border rounded-lg" rows="3" value={enunciado} onChange={(e) => setEnunciado(e.target.value)} placeholder="Digite o enunciado..."/>
@@ -250,27 +333,20 @@ export default function DashboardProfessor() {
                                     <textarea required={tipoQuestao === 'DI'} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" rows="3" value={respostaDiscursiva} onChange={(e) => setRespostaDiscursiva(e.target.value)} placeholder="Ex: A derivada de 2x² é 4x obtida através da regra do tombo."/>
                                 </div>
                             )}
-
                             <button type="submit" className="bg-emerald-600 text-white font-bold py-3 rounded-lg hover:bg-emerald-700 transition">Salvar Questão no Banco</button>
                         </form>
                     </div>
                 )}
 
-                {/* ABA: MONTAR PROVA MANUAL */}
                 {abaAtiva === 'montar_prova' && (
                     <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100">
                         <div className="flex justify-between items-center mb-6 border-b pb-2">
                             <h3 className="text-lg font-bold text-indigo-700">Montar Nova Prova Oficial</h3>
-                            <button 
-                                type="button"
-                                onClick={() => setCriandoQuestaoNaProva(!criandoQuestaoNaProva)}
-                                className="text-xs bg-slate-800 text-white font-semibold py-1.5 px-3 rounded hover:bg-slate-900 transition"
-                            >
+                            <button type="button" onClick={() => setCriandoQuestaoNaProva(!criandoQuestaoNaProva)} className="text-xs bg-slate-800 text-white font-semibold py-1.5 px-3 rounded hover:bg-slate-900 transition">
                                 {criandoQuestaoNaProva ? '← Voltar para a Seleção' : '+ Criar Nova Questão Sigilosa aqui'}
                             </button>
                         </div>
 
-                        {/* SUB-FORMULÁRIO: INLINE QUESTÃO SIGILOSA */}
                         {criandoQuestaoNaProva ? (
                             <div className="bg-slate-50 p-6 rounded-lg border border-dashed border-slate-300 mb-6">
                                 <h4 className="text-sm font-bold text-slate-700 mb-4">Nova Questão Direta (Nascerá Oculta/Sigilosa)</h4>
@@ -317,17 +393,11 @@ export default function DashboardProfessor() {
                                 </form>
                             </div>
                         ) : (
-                            /* FLUXO TRADICIONAL DE MONTAGEM COM SELEÇÃO */
                             <form onSubmit={handleSalvarProva} className="flex flex-col gap-6">
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Título da Prova</label>
-                                        <input 
-                                            type="text" required
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
-                                            value={tituloProva} onChange={(e) => setTituloProva(e.target.value)}
-                                            placeholder="Ex: Prova Oficial de BD"
-                                        />
+                                        <input type="text" required className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" value={tituloProva} onChange={(e) => setTituloProva(e.target.value)} placeholder="Ex: Prova Oficial de BD"/>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Turma Destino</label>
@@ -354,9 +424,7 @@ export default function DashboardProfessor() {
                                                                 {questao.tipo === 'ME' ? 'Múltipla Escolha' : 'Discursiva'}
                                                             </span>
                                                             {!questao.is_publica && (
-                                                                <span className="text-[10px] uppercase font-bold tracking-wider text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
-                                                                    Sigilosa
-                                                                </span>
+                                                                <span className="text-[10px] uppercase font-bold tracking-wider text-amber-700 bg-amber-100 px-2 py-0.5 rounded">Sigilosa</span>
                                                             )}
                                                         </div>
                                                     </div>
@@ -366,10 +434,7 @@ export default function DashboardProfessor() {
                                         ))}
                                     </div>
                                 </div>
-
-                                <button type="submit" className="mt-4 bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition shadow-md">
-                                    Salvar e Publicar para a Turma
-                                </button>
+                                <button type="submit" className="mt-4 bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition shadow-md">Salvar e Publicar para a Turma</button>
                             </form>
                         )}
                     </div>
