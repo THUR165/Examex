@@ -9,7 +9,8 @@ class GeracaoSimuladoStrategy(ABC):
 
 class GeracaoAleatoriaStrategy(GeracaoSimuladoStrategy):
     def gerar(self, aluno, quantidade_questoes=5, **kwargs):
-        todas_questoes = list(Questao.objects.all())
+        todas_questoes = list(Questao.objects.filter(is_publica=True))
+        
         if len(todas_questoes) < quantidade_questoes:
             questoes_sorteadas = todas_questoes
         else:
@@ -22,7 +23,6 @@ class GeracaoAleatoriaStrategy(GeracaoSimuladoStrategy):
         simulado.questoes.set(questoes_sorteadas)
         return simulado
 
-# --- NOVA ESTRATÉGIA ADICIONADA ---
 class MontagemManualStrategy(GeracaoSimuladoStrategy):
     def gerar(self, aluno, **kwargs):
         questoes_ids = kwargs.get('questoes_ids', [])

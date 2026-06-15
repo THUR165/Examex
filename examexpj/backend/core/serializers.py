@@ -23,13 +23,11 @@ class AlternativaSerializer(serializers.ModelSerializer):
 
 # 2. Agora o QuestaoSerializer pode usar o AlternativaSerializer sem problemas.
 class QuestaoSerializer(serializers.ModelSerializer):
-    # O nome da variável é igual ao related_name do seu models.py
     alternativas = AlternativaSerializer(many=True)
 
     class Meta:
         model = Questao
-        # Adicionamos o 'resposta_correta' aqui!
-        fields = ['id', 'enunciado', 'topico', 'tipo', 'peso', 'resposta_correta', 'alternativas']
+        fields = ['id', 'enunciado', 'topico', 'tipo', 'peso', 'resposta_correta', 'is_publica', 'alternativas']
 
     def create(self, validated_data):
         alternativas_data = validated_data.pop('alternativas', [])

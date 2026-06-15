@@ -58,8 +58,9 @@ class Questao(models.Model):
     topico = models.ForeignKey(Topico, on_delete=models.PROTECT, related_name='questoes')
     enunciado = models.TextField()
     tipo = models.CharField(max_length=2, choices=TIPO_CHOICES, default='ME')
-    resposta_correta = models.CharField(max_length=255) # Texto exato ou letra da alternativa
+    resposta_correta = models.CharField(max_length=255)
     peso = models.FloatField(default=1.0)
+    is_publica = models.BooleanField(default=True)
 
     def __str__(self):
         return f"[{self.topico.nome}] {self.enunciado[:50]}..."
