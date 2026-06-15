@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import Questao, Simulado, Alternativa, RespostaAluno, Usuario, Turma
-from .serializers import QuestaoSerializer, SimuladoSerializer, CustomTokenObtainPairSerializer, TurmaSerializer, RespostaPendenteSerializer, SimuladoDetalheSerializer
+from .serializers import QuestaoSerializer, SimuladoSerializer, CustomTokenObtainPairSerializer, TurmaSerializer, RespostaPendenteSerializer, SimuladoDetalheSerializer, AlunoSerializer
 from .permissions import IsProfessorOrReadOnly
 from django.db.models import Avg
 from django.shortcuts import get_object_or_404
@@ -48,7 +48,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
 
-class TurmaListView(generics.ListAPIView):
+class TurmaListView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = TurmaSerializer
 
@@ -58,6 +58,16 @@ class TurmaListView(generics.ListAPIView):
             return Turma.objects.filter(professor=user)
         return Turma.objects.filter(alunos=user)
 
+    def perform_create(self, serializer):
+        serializer.save(professor=self.request.user)
+
+class AlunoListView(generics.ListAPIView):
+    permission_classes = [IsProfessorOrReadOnly]
+    serializer_class = AlunoSerializer # O serializer que acabámos de criar
+
+    def get_queryset(self):
+        # Devolve apenas os utilizadores que são alunos
+        return Usuario.objects.filter(is_aluno=True)
 
 class MontarProvaManualView(APIView):
     permission_classes = [IsProfessorOrReadOnly]

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
-// --- NOVA IMPORTAÇÃO DOS GRÁFICOS ---
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function DashboardProfessor() {
@@ -11,11 +10,17 @@ export default function DashboardProfessor() {
     // Estados Gerais
     const [todasQuestoes, setTodasQuestoes] = useState([]);
     const [turmas, setTurmas] = useState([]);
+    const [alunosSistema, setAlunosSistema] = useState([]); // <-- Lista de todos os alunos do sistema
     
     // Estados de Correção e Gráficos
     const [correcoesPendentes, setCorrecoesPendentes] = useState([]);
     const [notasAtribuidas, setNotasAtribuidas] = useState({});
-    const [dadosGrafico, setDadosGrafico] = useState([]); // <-- NOVO: Estado do Gráfico
+    const [dadosGrafico, setDadosGrafico] = useState([]);
+
+    // --- NOVOS ESTADOS PARA CRIAR TURMA ---
+    const [nomeTurma, setNomeTurma] = useState('');
+    const [codigoTurma, setCodigoTurma] = useState('');
+    const [alunosSelecionados, setAlunosSelecionados] = useState([]);
 
     // Estados do Formulário de Questão
     const [enunciado, setEnunciado] = useState('');
@@ -50,9 +55,12 @@ export default function DashboardProfessor() {
             const resCorrecoes = await api.get('correcoes/pendentes/', { headers });
             setCorrecoesPendentes(resCorrecoes.data);
 
-            // --- NOVO: Busca os dados das turmas para o gráfico ---
             const resEstatisticas = await api.get('estatisticas/turmas/', { headers });
             setDadosGrafico(resEstatisticas.data);
+
+            // Busca os alunos disponíveis para matricular
+            const resAlunos = await api.get('alunos/', { headers });
+            setAlunosSistema(resAlunos.data);
             
         } catch (error) {
             console.error("Erro ao buscar dados:", error);
@@ -67,6 +75,33 @@ export default function DashboardProfessor() {
         localStorage.removeItem('token');
         localStorage.removeItem('is_professor');
         navigate('/');
+    };
+
+    // --- NOVA FUNÇÃO PARA SALVAR A TURMA ---
+    const handleCriarTurma = async (e) => {
+        e.preventDefault();
+        try {
+            const token = localStorage.getItem('token');
+            await api.post('turmas/', {
+                nome: nomeTurma,
+                codigo: codigoTurma,
+                alunos: alunosSelecionados
+            }, { headers: { Authorization: `Bearer ${token}` } });
+            
+            alert('Turma criada com sucesso!');
+            setNomeTurma('');
+            setCodigoTurma('');
+            setAlunosSelecionados([]);
+            fetchDados(); // Atualiza a lista na tela
+        } catch (error) {
+            alert('Erro ao criar turma. Verifique os dados e tente novamente.');
+        }
+    };
+
+    const toggleAluno = (id) => {
+        setAlunosSelecionados(prev => 
+            prev.includes(id) ? prev.filter(aId => aId !== id) : [...prev, id]
+        );
     };
 
     const handleTextoAlternativa = (index, novoTexto) => {
@@ -187,12 +222,12 @@ export default function DashboardProfessor() {
                         <h2 className="text-2xl font-bold text-gray-800">Administração de Conteúdo</h2>
                         <p className="text-gray-500">Gerencie suas questões, monte provas e avalie alunos.</p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap justify-end">
                         <button 
                             onClick={() => setAbaAtiva(abaAtiva === 'correcoes' ? 'estatisticas' : 'correcoes')} 
                             className={`relative ${abaAtiva === 'correcoes' ? 'bg-gray-500 hover:bg-gray-600' : 'bg-amber-500 hover:bg-amber-600'} text-white font-bold py-2 px-4 rounded-lg transition shadow-md`}
                         >
-                            {abaAtiva === 'correcoes' ? 'Cancelar' : 'Corrigir Provas'}
+                            Corrigir Provas
                             {correcoesPendentes.length > 0 && abaAtiva !== 'correcoes' && (
                                 <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-black px-2 py-0.5 rounded-full shadow-sm">
                                     {correcoesPendentes.length}
@@ -201,17 +236,24 @@ export default function DashboardProfessor() {
                         </button>
 
                         <button 
+                            onClick={() => setAbaAtiva(abaAtiva === 'turmas' ? 'estatisticas' : 'turmas')} 
+                            className={`${abaAtiva === 'turmas' ? 'bg-gray-500 hover:bg-gray-600' : 'bg-blue-600 hover:bg-blue-700'} text-white font-bold py-2 px-4 rounded-lg transition shadow-md`}
+                        >
+                            {abaAtiva === 'turmas' ? 'Cancelar' : 'Minhas Turmas'}
+                        </button>
+
+                        <button 
                             onClick={() => { setAbaAtiva(abaAtiva === 'montar_prova' ? 'estatisticas' : 'montar_prova'); setCriandoQuestaoNaProva(false); }} 
                             className={`${abaAtiva === 'montar_prova' ? 'bg-gray-500 hover:bg-gray-600' : 'bg-indigo-600 hover:bg-indigo-700'} text-white font-bold py-2 px-4 rounded-lg transition shadow-md`}
                         >
-                            {abaAtiva === 'montar_prova' ? 'Cancelar' : 'Montar Prova'}
+                            Montar Prova
                         </button>
                         
                         <button 
                             onClick={() => setAbaAtiva(abaAtiva === 'nova_questao' ? 'estatisticas' : 'nova_questao')} 
                             className={`${abaAtiva === 'nova_questao' ? 'bg-gray-500 hover:bg-gray-600' : 'bg-emerald-600 hover:bg-emerald-700'} text-white font-bold py-2 px-4 rounded-lg transition shadow-md`}
                         >
-                            {abaAtiva === 'nova_questao' ? 'Cancelar' : '+ Nova Questão'}
+                            + Nova Questão
                         </button>
                     </div>
                 </div>
@@ -219,7 +261,6 @@ export default function DashboardProfessor() {
                 {/* --- ABA DE ESTATÍSTICAS COM GRÁFICO --- */}
                 {abaAtiva === 'estatisticas' && (
                     <div className="space-y-6 mb-8">
-                        {/* Cards Superiores */}
                         <div className="grid grid-cols-3 gap-4">
                             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
                                 <h3 className="text-gray-500 text-sm font-medium">Minhas Turmas</h3>
@@ -235,7 +276,6 @@ export default function DashboardProfessor() {
                             </div>
                         </div>
 
-                        {/* Novo Bloco: Gráfico de Desempenho */}
                         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
                             <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Desempenho por Turma (Média)</h3>
                             {dadosGrafico.length > 0 ? (
@@ -261,11 +301,10 @@ export default function DashboardProfessor() {
                     </div>
                 )}
 
-                {/* ABA: CORREÇÕES PENDENTES */}
+                {/* --- ABA DE CORREÇÕES PENDENTES --- */}
                 {abaAtiva === 'correcoes' && (
                     <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100">
                         <h3 className="text-lg font-bold text-amber-600 mb-6 border-b pb-2">Central de Avaliação Manual</h3>
-                        
                         {correcoesPendentes.length === 0 ? (
                             <p className="text-gray-500 italic text-center py-8">Nenhuma resposta pendente de correção no momento. Excelente trabalho!</p>
                         ) : (
@@ -319,7 +358,7 @@ export default function DashboardProfessor() {
                     </div>
                 )}
 
-                {/* ABA: NOVA QUESTÃO */}
+                {/* --- ABA NOVA QUESTÃO --- */}
                 {abaAtiva === 'nova_questao' && (
                     <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100">
                         <h3 className="text-lg font-bold text-gray-800 mb-6 border-b pb-2">Cadastrar Nova Questão</h3>
@@ -375,7 +414,7 @@ export default function DashboardProfessor() {
                     </div>
                 )}
 
-                {/* ABA: MONTAR PROVA MANUAL */}
+                {/* --- ABA MONTAR PROVA MANUAL --- */}
                 {abaAtiva === 'montar_prova' && (
                     <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100">
                         <div className="flex justify-between items-center mb-6 border-b pb-2">
@@ -475,6 +514,63 @@ export default function DashboardProfessor() {
                                 <button type="submit" className="mt-4 bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition shadow-md">Salvar e Publicar para a Turma</button>
                             </form>
                         )}
+                    </div>
+                )}
+
+                {/* --- NOVA ABA: MINHAS TURMAS --- */}
+                {abaAtiva === 'turmas' && (
+                    <div className="grid grid-cols-2 gap-6">
+                        {/* Lado Esquerdo: Formulário de Criação */}
+                        <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100">
+                            <h3 className="text-lg font-bold text-blue-700 mb-6 border-b pb-2">Criar Nova Turma</h3>
+                            <form onSubmit={handleCriarTurma} className="flex flex-col gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Nome da Disciplina</label>
+                                    <input type="text" required className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={nomeTurma} onChange={(e) => setNomeTurma(e.target.value)} placeholder="Ex: Programação Web" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Código / Semestre</label>
+                                    <input type="text" required className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={codigoTurma} onChange={(e) => setCodigoTurma(e.target.value)} placeholder="Ex: PWEB-2026.1" />
+                                </div>
+                                
+                                <div className="mt-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Matricular Alunos ({alunosSelecionados.length} selecionados)</label>
+                                    <div className="max-h-48 overflow-y-auto border rounded-lg bg-gray-50 p-2 space-y-1">
+                                        {(alunosSistema || []).map(aluno => (
+                                            <label key={aluno.id} className="flex items-center gap-3 p-2 rounded hover:bg-blue-50 cursor-pointer">
+                                                <input type="checkbox" className="w-4 h-4 text-blue-600 rounded" checked={alunosSelecionados.includes(aluno.id)} onChange={() => toggleAluno(aluno.id)} />
+                                                <span className="text-sm font-medium text-gray-700">{aluno.username}</span>
+                                            </label>
+                                        ))}
+                                        {(!alunosSistema || alunosSistema.length === 0) && <p className="text-xs text-gray-500 italic p-2">Nenhum aluno registrado no sistema.</p>}
+                                    </div>
+                                </div>
+
+                                <button type="submit" className="mt-4 bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition shadow-md">
+                                    Salvar Turma
+                                </button>
+                            </form>
+                        </div>
+
+                        {/* Lado Direito: Lista de Turmas */}
+                        <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100">
+                            <h3 className="text-lg font-bold text-gray-800 mb-6 border-b pb-2">Turmas Ativas</h3>
+                            <div className="space-y-4">
+                                {(turmas || []).map(turma => (
+                                    <div key={turma.id} className="p-4 border rounded-lg bg-gray-50 flex justify-between items-center">
+                                        <div>
+                                            <h4 className="font-bold text-gray-800">{turma.nome}</h4>
+                                            <p className="text-xs text-gray-500 uppercase tracking-wide mt-1">{turma.codigo}</p>
+                                        </div>
+                                        <div className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">
+                                            {/* TRAVA DE SEGURANÇA ADICIONADA AQUI 👇 */}
+                                            {turma.alunos?.length || 0} Aluno(s)
+                                        </div>
+                                    </div>
+                                ))}
+                                {(!turmas || turmas.length === 0) && <p className="text-sm text-gray-500 italic">Você ainda não gerencia nenhuma turma.</p>}
+                            </div>
+                        </div>
                     </div>
                 )}
             </main>

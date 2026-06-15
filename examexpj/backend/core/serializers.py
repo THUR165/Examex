@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import Questao, Topico, Disciplina, Simulado, Alternativa, Turma, RespostaAluno
+from .models import Questao, Topico, Disciplina, Simulado, Alternativa, Turma, RespostaAluno, Usuario
 
 class DisciplinaSerializer(serializers.ModelSerializer):
     class Meta:
@@ -52,7 +52,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 class TurmaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Turma
-        fields = ['id', 'nome', 'codigo']
+        fields = ['id', 'nome', 'codigo', 'professor', 'alunos']
+        read_only_fields = ['professor']
 
 
 class RespostaPendenteSerializer(serializers.ModelSerializer):
@@ -91,3 +92,8 @@ class SimuladoDetalheSerializer(serializers.ModelSerializer):
     class Meta:
         model = Simulado
         fields = ['id', 'titulo', 'data_criacao', 'finalizado', 'nota_final', 'respostas']
+
+class AlunoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Usuario
+        fields = ['id', 'username']
