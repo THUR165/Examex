@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import Usuario, Disciplina, Topico, Questao, Alternativa, Simulado, RespostaAluno
+from .models import Usuario, Disciplina, Topico, Questao, Alternativa, Simulado, RespostaAluno, Turma
 
 # 1. Configuração do Usuário
 class UsuarioCustomAdmin(UserAdmin):
@@ -23,3 +23,4 @@ admin.site.register(Topico)
 admin.site.register(Questao, QuestaoAdmin)
 admin.site.register(Simulado)
 admin.site.register(RespostaAluno)
+admin.site.register(Turma)
