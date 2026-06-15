@@ -4,8 +4,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import Questao, Simulado, Alternativa, RespostaAluno, Usuario, Turma
-from .serializers import QuestaoSerializer, SimuladoSerializer, CustomTokenObtainPairSerializer, TurmaSerializer, RespostaPendenteSerializer
+from .serializers import QuestaoSerializer, SimuladoSerializer, CustomTokenObtainPairSerializer, TurmaSerializer, RespostaPendenteSerializer, SimuladoDetalheSerializer
 from .permissions import IsProfessorOrReadOnly
+from django.db.models import Avg
 from django.shortcuts import get_object_or_404
 from .services import MotorDeSimulados, GeracaoAleatoriaStrategy, MontagemManualStrategy
 
@@ -14,8 +15,6 @@ class RespostasPendentesListView(generics.ListAPIView):
     serializer_class = RespostaPendenteSerializer
 
     def get_queryset(self):
-        # Filtra respostas de texto (DI) que ainda não têm nota, 
-        # de simulados já finalizados, que pertencem às turmas do professor logado
         return RespostaAluno.objects.filter(
             questao__tipo='DI',
             nota_atribuida__isnull=True,
@@ -130,11 +129,9 @@ class FinalizarSimuladoView(APIView):
                         correta = True
                         soma_pesos_certas += questao.peso
 
-            # --- ARMAZENAMENTO MANUAL (DISCURSIVA) ---
             elif questao.tipo == 'DI':
                 tem_discursiva = True
-                texto_resposta = resposta_aluno # Guarda o texto digitado pelo aluno
-                # Não somamos aos pesos certos ainda. O professor fará isso depois.
+                texto_resposta = resposta_aluno
 
             RespostaAluno.objects.create(
                 simulado=simulado,
@@ -168,19 +165,16 @@ class CorrigirRespostaView(APIView):
     permission_classes = [IsProfessorOrReadOnly]
 
     def post(self, request, pk):
-        # Busca a resposta garantindo que ela é de um aluno da turma deste professor
         resposta = get_object_or_404(RespostaAluno, pk=pk, simulado__turma__professor=request.user)
         nota_dada = float(request.data.get('nota', 0))
         
         if nota_dada < 0 or nota_dada > resposta.questao.peso:
             return Response({"erro": f"A nota deve estar entre 0 e {resposta.questao.peso}"}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Salva a nota manual na resposta
         resposta.nota_atribuida = nota_dada
         resposta.esta_correta = (nota_dada > 0)
         resposta.save()
 
-        # RECALCULA A NOTA FINAL DA PROVA INTEIRA DO ALUNO
         simulado = resposta.simulado
         soma_pesos_certas = 0.0
         soma_pesos_total = 0.0
@@ -201,3 +195,41 @@ class CorrigirRespostaView(APIView):
         simulado.save()
 
         return Response({"mensagem": "Correção aplicada e nota final da prova recalculada!"}, status=status.HTTP_200_OK)
+    
+class SimuladoDetalheView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SimuladoDetalheSerializer
+
+    def get_queryset(self):
+        return Simulado.objects.filter(aluno=self.request.user)
+
+class EstatisticasProfessorView(APIView):
+    permission_classes = [IsProfessorOrReadOnly]
+
+    def get(self, request):
+        turmas = Turma.objects.filter(professor=request.user)
+        dados = []
+        for turma in turmas:
+            media = Simulado.objects.filter(turma=turma, finalizado=True).aggregate(Avg('nota_final'))['nota_final__avg']
+            dados.append({
+                "nome": turma.nome,
+                "media": round(media, 2) if media else 0
+            })
+        return Response(dados)
+    
+class ExcluirSimuladoAleatorioView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        # Busca o simulado garantindo que é do aluno logado
+        simulado = get_object_or_404(Simulado, pk=pk, aluno=request.user)
+        
+        # Trava de Segurança: Se tiver turma, é prova oficial e não pode apagar!
+        if simulado.turma is not None:
+            return Response(
+                {"erro": "Você não pode excluir provas oficiais do professor."}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
+        simulado.delete()
+        return Response({"mensagem": "Simulado de treino excluído com sucesso!"}, status=status.HTTP_204_NO_CONTENT)

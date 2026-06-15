@@ -8,6 +8,9 @@ export default function Dashboard() {
     const [simulados, setSimulados] = useState([]);
     const [simuladoAtivo, setSimuladoAtivo] = useState(null);
     const [respostas, setRespostas] = useState({});
+    
+    // --- ESTADO PARA O GABARITO ---
+    const [gabaritoAtivo, setGabaritoAtivo] = useState(null);
 
     const fetchSimulados = async () => {
         try {
@@ -34,9 +37,7 @@ export default function Dashboard() {
     const handleGerarSimuladoAleatorio = async () => {
         try {
             const token = localStorage.getItem('token');
-            await api.post('simulados/gerar/', {}, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            await api.post('simulados/gerar/', {}, { headers: { Authorization: `Bearer ${token}` } });
             alert('Novo simulado aleatório gerado com sucesso!');
             fetchSimulados();
         } catch (error) {
@@ -44,12 +45,8 @@ export default function Dashboard() {
         }
     };
 
-    // Guarda ID (ME) ou Texto (DI)
     const handleResposta = (questaoId, valor) => {
-        setRespostas(prev => ({
-            ...prev,
-            [questaoId]: valor
-        }));
+        setRespostas(prev => ({ ...prev, [questaoId]: valor }));
     };
 
     const handleFinalizarProva = async (e) => {
@@ -57,12 +54,10 @@ export default function Dashboard() {
         try {
             const token = localStorage.getItem('token');
             const payload = { respostas: respostas };
-
             const response = await api.post(`simulados/${simuladoAtivo.id}/finalizar/`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            // Verifica se tem aviso de correção pendente
             if (response.data.aviso) {
                 alert(`${response.data.mensagem}\n\n${response.data.aviso}`);
             } else {
@@ -73,8 +68,34 @@ export default function Dashboard() {
             setRespostas({});
             fetchSimulados();
         } catch (error) {
-            console.error(error);
             alert('Erro ao submeter a prova.');
+        }
+    };
+
+    const handleVerGabarito = async (simuladoId) => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await api.get(`simulados/${simuladoId}/detalhes/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setGabaritoAtivo(response.data);
+        } catch (error) {
+            alert("Erro ao buscar os detalhes da prova.");
+        }
+    };
+
+    const handleExcluirSimulado = async (simuladoId) => {
+        const confirmar = window.confirm("Tem certeza que deseja excluir este treino? O histórico será perdido.");
+        if (!confirmar) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            await api.delete(`simulados/${simuladoId}/excluir/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            fetchSimulados(); // Recarrega a lista para a prova sumir da tela
+        } catch (error) {
+            alert("Erro ao excluir. Provas oficiais não podem ser apagadas.");
         }
     };
 
@@ -86,13 +107,65 @@ export default function Dashboard() {
             </nav>
 
             <main className="max-w-4xl mx-auto mt-8 p-4">
-                {simuladoAtivo ? (
+                {/* --- TELA DE GABARITO --- */}
+                {gabaritoAtivo ? (
+                    <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100">
+                        <div className="flex justify-between items-center mb-6 border-b pb-4">
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-800">Resultado: {gabaritoAtivo.titulo}</h2>
+                                <p className="text-gray-500 font-medium mt-1">Sua nota atual: <span className="text-blue-600 font-bold">{Number(gabaritoAtivo.nota_final).toFixed(2)}</span> / 10</p>
+                            </div>
+                            <button onClick={() => setGabaritoAtivo(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-bold py-2 px-4 rounded-lg transition">
+                                Voltar para Home
+                            </button>
+                        </div>
+
+                        <div className="space-y-6">
+                            {gabaritoAtivo.respostas.map((resp, index) => (
+                                <div key={index} className={`p-5 rounded-lg border-l-4 ${resp.esta_correta ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500'}`}>
+                                    <div className="flex justify-between mb-2">
+                                        <span className="font-bold text-gray-800">Questão {index + 1}</span>
+                                        <span className={`text-xs font-bold px-2 py-1 rounded ${resp.esta_correta ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
+                                            {resp.esta_correta ? 'Acertou' : 'Errou'}
+                                        </span>
+                                    </div>
+                                    <p className="text-gray-700 mb-4">{resp.questao_enunciado}</p>
+
+                                    {resp.questao_tipo === 'ME' ? (
+                                        <div className="grid grid-cols-2 gap-4 text-sm">
+                                            <div className="bg-white p-3 rounded border">
+                                                <span className="text-gray-500 block text-xs font-bold uppercase mb-1">Você marcou</span>
+                                                <span className="font-bold text-gray-800">{resp.alternativa_marcada_letra || 'Deixou em branco'}</span>
+                                            </div>
+                                            <div className="bg-white p-3 rounded border border-green-200">
+                                                <span className="text-green-600 block text-xs font-bold uppercase mb-1">Gabarito Correto</span>
+                                                <span className="font-bold text-green-800">{resp.questao_gabarito}</span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3 text-sm">
+                                            <div className="bg-white p-3 rounded border">
+                                                <span className="text-gray-500 block text-xs font-bold uppercase mb-1">Sua Resposta Escrita</span>
+                                                <p className="text-gray-800">{resp.texto_resposta}</p>
+                                            </div>
+                                            <div className="bg-white p-3 rounded border">
+                                                <span className="text-blue-600 block text-xs font-bold uppercase mb-1">Nota Atribuída pelo Professor</span>
+                                                <span className="font-bold text-lg text-blue-800">
+                                                    {resp.nota_atribuida !== null ? `${resp.nota_atribuida} de ${resp.questao_peso}` : 'Aguardando Correção'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : simuladoAtivo ? (
+                    /* --- TELA DE FAZER A PROVA --- */
                     <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100">
                         <div className="flex justify-between items-center mb-6 border-b pb-4">
                             <h2 className="text-2xl font-bold text-gray-800">{simuladoAtivo.titulo}</h2>
-                            <button onClick={() => { setSimuladoAtivo(null); setRespostas({}); }} className="text-gray-500 hover:text-gray-700 text-sm font-medium">
-                                Abandonar Prova
-                            </button>
+                            <button onClick={() => { setSimuladoAtivo(null); setRespostas({}); }} className="text-gray-500 hover:text-gray-700 text-sm font-medium">Abandonar Prova</button>
                         </div>
 
                         <form onSubmit={handleFinalizarProva} className="space-y-8">
@@ -101,15 +174,12 @@ export default function Dashboard() {
                                     <div className="flex justify-between items-center mb-3">
                                         <span className="font-bold text-blue-600 text-sm">Questão {qIndex + 1}</span>
                                         <div className="flex gap-2 items-center">
-                                            <span className="text-xs uppercase font-bold text-gray-500 bg-gray-200 px-2 py-0.5 rounded">
-                                                {questao.tipo === 'ME' ? 'Múltipla Escolha' : 'Discursiva'}
-                                            </span>
+                                            <span className="text-xs uppercase font-bold text-gray-500 bg-gray-200 px-2 py-0.5 rounded">{questao.tipo === 'ME' ? 'Múltipla Escolha' : 'Discursiva'}</span>
                                             <span className="text-xs text-gray-400 bg-gray-200 px-2 py-0.5 rounded">Peso: {questao.peso}</span>
                                         </div>
                                     </div>
                                     <p className="text-gray-800 text-lg font-medium mb-4">{questao.enunciado}</p>
                                     
-                                    {/* SE FOR MÚLTIPLA ESCOLHA: MOSTRA OS RADIOS */}
                                     {questao.tipo === 'ME' ? (
                                         <div className="space-y-2">
                                             {questao.alternativas.map((alt) => (
@@ -121,30 +191,20 @@ export default function Dashboard() {
                                             ))}
                                         </div>
                                     ) : (
-                                        /* SE FOR DISCURSIVA: MOSTRA CAMPO DE TEXTO */
-                                        <textarea 
-                                            required
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
-                                            rows="4" 
-                                            placeholder="Digite a sua resposta aqui..."
-                                            value={respostas[questao.id] || ''}
-                                            onChange={(e) => handleResposta(questao.id, e.target.value)}
-                                        />
+                                        <textarea required className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" rows="4" placeholder="Digite a sua resposta aqui..." value={respostas[questao.id] || ''} onChange={(e) => handleResposta(questao.id, e.target.value)}/>
                                     )}
                                 </div>
                             ))}
-
-                            <button type="submit" className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition shadow-md">
-                                Entregar e Finalizar Prova
-                            </button>
+                            <button type="submit" className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition shadow-md">Entregar e Finalizar Prova</button>
                         </form>
                     </div>
                 ) : (
+                    /* --- TELA INICIAL COM LISTA DE PROVAS --- */
                     <>
                         <div className="flex justify-between items-center mb-6">
                             <div>
                                 <h2 className="text-2xl font-bold text-gray-800">Minhas Provas e Simulados</h2>
-                                <p className="text-gray-500">Realiza os teus exames oficiais ou gera treinos rápidos.</p>
+                                <p className="text-gray-500">Realize os seus exames oficiais ou gere treinos rápidos.</p>
                             </div>
                             <button onClick={handleGerarSimuladoAleatorio} className="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 transition shadow-md">
                                 + Gerar Treino Aleatório
@@ -152,28 +212,54 @@ export default function Dashboard() {
                         </div>
 
                         <div className="grid gap-4">
-                            {simulados.map((simulado) => (
-                                <div key={simulado.id} className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center hover:shadow-md transition">
-                                    <div>
-                                        <h3 className="text-lg font-bold text-gray-800">{simulado.titulo}</h3>
-                                        <p className="text-sm text-gray-400 mt-1">Criado em: {new Date(simulado.data_criacao).toLocaleDateString('pt-BR')}</p>
+                            {simulados.map((simulado) => {
+                                // Verifica se é um treino gerado pelo aluno (geralmente tem "Aleatório" no título)
+                                const isTreino = simulado.titulo.includes("Aleatório");
+                                
+                                return (
+                                    <div key={simulado.id} className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center hover:shadow-md transition">
+                                        <div>
+                                            <h3 className="text-lg font-bold text-gray-800">{simulado.titulo}</h3>
+                                            <p className="text-sm text-gray-400 mt-1">Criado em: {new Date(simulado.data_criacao).toLocaleDateString('pt-BR')}</p>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-4">
+                                            {simulado.finalizado ? (
+                                                <>
+                                                    <div className="text-right">
+                                                        <span className="text-xs font-semibold bg-green-100 text-green-800 px-2.5 py-1 rounded-full">Concluído</span>
+                                                        <p className="text-xl font-black text-gray-800 mt-1">Nota: {Number(simulado.nota_final).toFixed(2)}</p>
+                                                    </div>
+                                                    <button onClick={() => handleVerGabarito(simulado.id)} className="bg-gray-100 hover:bg-gray-200 text-blue-600 text-sm font-bold py-2 px-4 rounded-lg transition border border-gray-300">
+                                                        Ver Gabarito
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <button onClick={() => setSimuladoAtivo(simulado)} className="bg-slate-800 hover:bg-slate-900 text-white text-sm font-bold py-2 px-4 rounded-lg transition">
+                                                    Iniciar Prova
+                                                </button>
+                                            )}
+                                            
+                                            {/* BOTÃO EXCLUIR APARECE APENAS SE FOR TREINO */}
+                                            {isTreino && (
+                                                <button 
+                                                    onClick={() => handleExcluirSimulado(simulado.id)}
+                                                    className="text-red-400 hover:text-red-600 hover:bg-red-50 text-sm font-bold py-2 px-3 rounded-lg transition border border-red-200 ml-2"
+                                                    title="Excluir este treino"
+                                                >
+                                                    🗑️ Excluir
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
-                                    
-                                    <div>
-                                        {simulado.finalizado ? (
-                                            <div className="text-right">
-                                                <span className="text-xs font-semibold bg-green-100 text-green-800 px-2.5 py-1 rounded-full">Concluído</span>
-                                                <p className="text-xl font-black text-gray-800 mt-1">Nota Atual: {Number(simulado.nota_final).toFixed(2)}</p>
-                                            </div>
-                                        ) : (
-                                            <button onClick={() => setSimuladoAtivo(simulado)} className="bg-slate-800 hover:bg-slate-900 text-white text-sm font-bold py-2 px-4 rounded-lg transition">
-                                                Iniciar Prova
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                            {simulados.length === 0 && <p className="text-gray-500 italic text-center py-8 bg-white rounded-lg border">Nenhuma prova atribuída de momento.</p>}
+                                );
+                            })}
+                            
+                            {simulados.length === 0 && (
+                                <p className="text-gray-500 italic text-center py-8 bg-white rounded-lg border">
+                                    Nenhuma prova atribuída no momento.
+                                </p>
+                            )}
                         </div>
                     </>
                 )}

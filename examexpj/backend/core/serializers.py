@@ -14,14 +14,11 @@ class TopicoSerializer(serializers.ModelSerializer):
         model = Topico
         fields = ['id', 'nome', 'disciplina']
 
-# 1. Movido para cima! O Python agora lê isso aqui primeiro.
 class AlternativaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Alternativa
-        # Usando os campos exatos do seu model
         fields = ['id', 'letra', 'texto']
 
-# 2. Agora o QuestaoSerializer pode usar o AlternativaSerializer sem problemas.
 class QuestaoSerializer(serializers.ModelSerializer):
     alternativas = AlternativaSerializer(many=True)
 
@@ -72,3 +69,25 @@ class RespostaPendenteSerializer(serializers.ModelSerializer):
             'questao_enunciado', 'questao_gabarito', 
             'peso_maximo', 'texto_resposta'
         ]
+
+class RespostaDetalheSerializer(serializers.ModelSerializer):
+    questao_enunciado = serializers.CharField(source='questao.enunciado', read_only=True)
+    questao_tipo = serializers.CharField(source='questao.tipo', read_only=True)
+    questao_peso = serializers.FloatField(source='questao.peso', read_only=True)
+    questao_gabarito = serializers.CharField(source='questao.resposta_correta', read_only=True)
+    alternativa_marcada_letra = serializers.CharField(source='alternativa_marcada.letra', read_only=True)
+
+    class Meta:
+        model = RespostaAluno
+        fields = [
+            'questao_enunciado', 'questao_tipo', 'questao_peso', 
+            'questao_gabarito', 'alternativa_marcada_letra', 
+            'texto_resposta', 'esta_correta', 'nota_atribuida'
+        ]
+
+class SimuladoDetalheSerializer(serializers.ModelSerializer):
+    respostas = RespostaDetalheSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Simulado
+        fields = ['id', 'titulo', 'data_criacao', 'finalizado', 'nota_final', 'respostas']

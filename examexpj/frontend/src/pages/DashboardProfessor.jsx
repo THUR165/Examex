@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+// --- NOVA IMPORTAÇÃO DOS GRÁFICOS ---
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function DashboardProfessor() {
     const navigate = useNavigate();
@@ -10,9 +12,10 @@ export default function DashboardProfessor() {
     const [todasQuestoes, setTodasQuestoes] = useState([]);
     const [turmas, setTurmas] = useState([]);
     
-    // --- ESTADOS DE CORREÇÃO ---
+    // Estados de Correção e Gráficos
     const [correcoesPendentes, setCorrecoesPendentes] = useState([]);
     const [notasAtribuidas, setNotasAtribuidas] = useState({});
+    const [dadosGrafico, setDadosGrafico] = useState([]); // <-- NOVO: Estado do Gráfico
 
     // Estados do Formulário de Questão
     const [enunciado, setEnunciado] = useState('');
@@ -46,6 +49,10 @@ export default function DashboardProfessor() {
             
             const resCorrecoes = await api.get('correcoes/pendentes/', { headers });
             setCorrecoesPendentes(resCorrecoes.data);
+
+            // --- NOVO: Busca os dados das turmas para o gráfico ---
+            const resEstatisticas = await api.get('estatisticas/turmas/', { headers });
+            setDadosGrafico(resEstatisticas.data);
             
         } catch (error) {
             console.error("Erro ao buscar dados:", error);
@@ -209,23 +216,52 @@ export default function DashboardProfessor() {
                     </div>
                 </div>
 
+                {/* --- ABA DE ESTATÍSTICAS COM GRÁFICO --- */}
                 {abaAtiva === 'estatisticas' && (
-                    <div className="grid grid-cols-3 gap-4 mb-8">
-                        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-                            <h3 className="text-gray-500 text-sm font-medium">Minhas Turmas</h3>
-                            <p className="text-3xl font-bold text-indigo-600 mt-2">{turmas.length}</p>
+                    <div className="space-y-6 mb-8">
+                        {/* Cards Superiores */}
+                        <div className="grid grid-cols-3 gap-4">
+                            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+                                <h3 className="text-gray-500 text-sm font-medium">Minhas Turmas</h3>
+                                <p className="text-3xl font-bold text-indigo-600 mt-2">{turmas.length}</p>
+                            </div>
+                            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+                                <h3 className="text-gray-500 text-sm font-medium">Questões no Banco</h3>
+                                <p className="text-3xl font-bold text-emerald-600 mt-2">{todasQuestoes.length}</p>
+                            </div>
+                            <div className="bg-amber-50 p-6 rounded-lg shadow-sm border border-amber-200">
+                                <h3 className="text-amber-800 text-sm font-medium">Aguardando Correção</h3>
+                                <p className="text-3xl font-bold text-amber-600 mt-2">{correcoesPendentes.length}</p>
+                            </div>
                         </div>
+
+                        {/* Novo Bloco: Gráfico de Desempenho */}
                         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-                            <h3 className="text-gray-500 text-sm font-medium">Questões no Banco</h3>
-                            <p className="text-3xl font-bold text-emerald-600 mt-2">{todasQuestoes.length}</p>
-                        </div>
-                        <div className="bg-amber-50 p-6 rounded-lg shadow-sm border border-amber-200">
-                            <h3 className="text-amber-800 text-sm font-medium">Aguardando Correção</h3>
-                            <p className="text-3xl font-bold text-amber-600 mt-2">{correcoesPendentes.length}</p>
+                            <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Desempenho por Turma (Média)</h3>
+                            {dadosGrafico.length > 0 ? (
+                                <div className="h-72 mt-6">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={dadosGrafico} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                                            <XAxis dataKey="nome" tick={{ fill: '#6b7280' }} axisLine={false} tickLine={false} />
+                                            <YAxis domain={[0, 10]} tick={{ fill: '#6b7280' }} axisLine={false} tickLine={false} />
+                                            <Tooltip cursor={{ fill: '#f3f4f6' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                            <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                                            <Bar dataKey="media" name="Média Final da Turma" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            ) : (
+                                <div className="py-12 flex flex-col items-center justify-center text-center">
+                                    <p className="text-gray-400 italic mb-2">Ainda não há dados suficientes para gerar o gráfico.</p>
+                                    <p className="text-sm text-gray-400">As turmas precisam ter simulados finalizados e corrigidos.</p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
 
+                {/* ABA: CORREÇÕES PENDENTES */}
                 {abaAtiva === 'correcoes' && (
                     <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100">
                         <h3 className="text-lg font-bold text-amber-600 mb-6 border-b pb-2">Central de Avaliação Manual</h3>
@@ -283,6 +319,7 @@ export default function DashboardProfessor() {
                     </div>
                 )}
 
+                {/* ABA: NOVA QUESTÃO */}
                 {abaAtiva === 'nova_questao' && (
                     <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100">
                         <h3 className="text-lg font-bold text-gray-800 mb-6 border-b pb-2">Cadastrar Nova Questão</h3>
@@ -338,6 +375,7 @@ export default function DashboardProfessor() {
                     </div>
                 )}
 
+                {/* ABA: MONTAR PROVA MANUAL */}
                 {abaAtiva === 'montar_prova' && (
                     <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100">
                         <div className="flex justify-between items-center mb-6 border-b pb-2">
