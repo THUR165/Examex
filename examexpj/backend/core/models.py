@@ -80,6 +80,17 @@ class Simulado(models.Model):
     finalizado = models.BooleanField(default=False)
     nota_final = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     
+    turma = models.ForeignKey(
+        Turma, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='provas_vinculadas'
+    )
+
+    def __str__(self):
+        return f"{self.titulo} - {self.aluno.username} ({self.data_criacao.strftime('%d/%m/%Y')})"
+    
 
 class RespostaAluno(models.Model):
     simulado = models.ForeignKey(Simulado, on_delete=models.CASCADE, related_name='respostas')

@@ -5,7 +5,6 @@ import api from '../services/api';
 export default function DashboardProfessor() {
     const navigate = useNavigate();
     
-    // Controle das abas: 'estatisticas', 'nova_questao', 'montar_prova'
     const [abaAtiva, setAbaAtiva] = useState('estatisticas');
 
     // Estados para Criar Questão
@@ -22,22 +21,31 @@ export default function DashboardProfessor() {
     const [todasQuestoes, setTodasQuestoes] = useState([]);
     const [tituloProva, setTituloProva] = useState('');
     const [questoesSelecionadas, setQuestoesSelecionadas] = useState([]);
+    
+    // --- NOVOS ESTADOS DA TURMA ---
+    const [turmas, setTurmas] = useState([]);
+    const [turmaSelecionada, setTurmaSelecionada] = useState('');
 
-    // Busca as questões assim que o painel carrega
     useEffect(() => {
-        const fetchQuestoes = async () => {
+        const fetchDados = async () => {
             try {
                 const token = localStorage.getItem('token');
-                const response = await api.get('questoes/', {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                setTodasQuestoes(response.data);
+                const headers = { Authorization: `Bearer ${token}` };
+                
+                // Busca as questões
+                const resQuestoes = await api.get('questoes/', { headers });
+                setTodasQuestoes(resQuestoes.data);
+                
+                // Busca as turmas do professor logado
+                const resTurmas = await api.get('turmas/', { headers });
+                setTurmas(resTurmas.data);
+                
             } catch (error) {
-                console.error("Erro ao buscar questões:", error);
+                console.error("Erro ao buscar dados iniciais:", error);
             }
         };
-        fetchQuestoes();
-    }, [abaAtiva]); // Recarrega sempre que mudar de aba
+        fetchDados();
+    }, [abaAtiva]); 
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -45,7 +53,6 @@ export default function DashboardProfessor() {
         navigate('/');
     };
 
-    // --- FUNÇÕES DE CRIAÇÃO DE QUESTÃO ---
     const handleTextoAlternativa = (index, novoTexto) => {
         const novasAlternativas = [...alternativas];
         novasAlternativas[index].texto = novoTexto;
@@ -66,7 +73,6 @@ export default function DashboardProfessor() {
         }
     };
 
-    // --- FUNÇÕES DE MONTAGEM DE PROVA ---
     const toggleQuestao = (id) => {
         setQuestoesSelecionadas(prev => 
             prev.includes(id) ? prev.filter(qId => qId !== id) : [...prev, id]
@@ -79,17 +85,33 @@ export default function DashboardProfessor() {
             alert("Selecione ao menos uma questão!");
             return;
         }
+        if (!turmaSelecionada) {
+            alert("Selecione uma turma para enviar a prova!");
+            return;
+        }
+        
         try {
             const token = localStorage.getItem('token');
-            const payload = { titulo: tituloProva, questoes_ids: questoesSelecionadas };
+            // --- PAYLOAD ATUALIZADO COM A TURMA ---
+            const payload = { 
+                titulo: tituloProva, 
+                questoes_ids: questoesSelecionadas,
+                turma_id: turmaSelecionada
+            };
             
-            await api.post('provas/montar/', payload, { headers: { Authorization: `Bearer ${token}` } });
-            alert('Prova Oficial montada e salva com sucesso!');
+            const response = await api.post('provas/montar/', payload, { 
+                headers: { Authorization: `Bearer ${token}` } 
+            });
+            
+            // Mostra a mensagem que veio do Django (ex: "Prova distribuída para X alunos")
+            alert(response.data.mensagem);
+            
             setTituloProva('');
             setQuestoesSelecionadas([]);
+            setTurmaSelecionada('');
             setAbaAtiva('estatisticas');
         } catch (error) {
-            alert('Erro ao salvar a prova.');
+            alert('Erro ao salvar a prova. Verifique se escolheu uma turma válida.');
         }
     };
 
@@ -107,12 +129,18 @@ export default function DashboardProfessor() {
                         <p className="text-gray-500">Gerencie suas questões e monte novas provas.</p>
                     </div>
                     <div className="flex gap-2">
+                        {/* Botão de Montar Prova com o Toggle atualizado */}
                         <button 
-                        onClick={() => setAbaAtiva(abaAtiva === 'montar_prova' ? 'estatisticas' : 'montar_prova')}
-                        className={`${abaAtiva === 'montar_prova' ? 'bg-gray-500 hover:bg-gray-600' : 'bg-indigo-600 hover:bg-indigo-700'} text-white font-bold py-2 px-4 rounded-lg transition shadow-md`}>
+                            onClick={() => setAbaAtiva(abaAtiva === 'montar_prova' ? 'estatisticas' : 'montar_prova')} 
+                            className={`${abaAtiva === 'montar_prova' ? 'bg-gray-500 hover:bg-gray-600' : 'bg-indigo-600 hover:bg-indigo-700'} text-white font-bold py-2 px-4 rounded-lg transition shadow-md`}
+                        >
                             {abaAtiva === 'montar_prova' ? 'Cancelar' : 'Montar Prova'}
                         </button>
-                        <button onClick={() => setAbaAtiva(abaAtiva === 'nova_questao' ? 'estatisticas' : 'nova_questao')} className={`${abaAtiva === 'nova_questao' ? 'bg-gray-500 hover:bg-gray-600' : 'bg-emerald-600 hover:bg-emerald-700'} text-white font-bold py-2 px-4 rounded-lg transition shadow-md`}>
+                        
+                        <button 
+                            onClick={() => setAbaAtiva(abaAtiva === 'nova_questao' ? 'estatisticas' : 'nova_questao')} 
+                            className={`${abaAtiva === 'nova_questao' ? 'bg-gray-500 hover:bg-gray-600' : 'bg-emerald-600 hover:bg-emerald-700'} text-white font-bold py-2 px-4 rounded-lg transition shadow-md`}
+                        >
                             {abaAtiva === 'nova_questao' ? 'Cancelar' : '+ Nova Questão'}
                         </button>
                     </div>
@@ -120,10 +148,14 @@ export default function DashboardProfessor() {
 
                 {/* ABA: ESTATÍSTICAS */}
                 {abaAtiva === 'estatisticas' && (
-                    <div className="grid grid-cols-2 gap-4 mb-8">
+                    <div className="grid grid-cols-3 gap-4 mb-8">
+                        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+                            <h3 className="text-gray-500 text-sm font-medium">Minhas Turmas</h3>
+                            <p className="text-3xl font-bold text-indigo-600 mt-2">{turmas.length}</p>
+                        </div>
                         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
                             <h3 className="text-gray-500 text-sm font-medium">Questões no Banco</h3>
-                            <p className="text-3xl font-bold text-gray-800 mt-2">{todasQuestoes.length}</p>
+                            <p className="text-3xl font-bold text-emerald-600 mt-2">{todasQuestoes.length}</p>
                         </div>
                     </div>
                 )}
@@ -131,7 +163,6 @@ export default function DashboardProfessor() {
                 {/* ABA: NOVA QUESTÃO */}
                 {abaAtiva === 'nova_questao' && (
                     <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100">
-                        {/* ... Código do formulário de questão que criamos antes ... */}
                         <h3 className="text-lg font-bold text-gray-800 mb-6 border-b pb-2">Cadastrar Nova Questão</h3>
                         <form onSubmit={handleSalvarQuestao} className="flex flex-col gap-6">
                             <div><textarea required className="w-full px-4 py-2 border rounded-lg" rows="3" value={enunciado} onChange={(e) => setEnunciado(e.target.value)} placeholder="Enunciado..."/></div>
@@ -152,16 +183,37 @@ export default function DashboardProfessor() {
                 {/* ABA: MONTAR PROVA MANUAL */}
                 {abaAtiva === 'montar_prova' && (
                     <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100">
-                        <h3 className="text-lg font-bold text-indigo-700 mb-6 border-b pb-2">Montar Nova Prova</h3>
+                        <h3 className="text-lg font-bold text-indigo-700 mb-6 border-b pb-2">Montar Nova Prova Oficial</h3>
                         <form onSubmit={handleSalvarProva} className="flex flex-col gap-6">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Título da Prova</label>
-                                <input 
-                                    type="text" required
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                                    value={tituloProva} onChange={(e) => setTituloProva(e.target.value)}
-                                    placeholder="Ex: Prova 1 - Estrutura de Dados"
-                                />
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Título da Prova</label>
+                                    <input 
+                                        type="text" required
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        value={tituloProva} onChange={(e) => setTituloProva(e.target.value)}
+                                        placeholder="Ex: Prova 1 - Estrutura de Dados"
+                                    />
+                                </div>
+
+                                {/* NOVO CAMPO: SELEÇÃO DE TURMA */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Turma Destino</label>
+                                    <select 
+                                        required
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                        value={turmaSelecionada} 
+                                        onChange={(e) => setTurmaSelecionada(e.target.value)}
+                                    >
+                                        <option value="" disabled>Selecione uma turma...</option>
+                                        {turmas.map((turma) => (
+                                            <option key={turma.id} value={turma.id}>
+                                                {turma.nome} ({turma.codigo})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
 
                             <div>
@@ -186,7 +238,7 @@ export default function DashboardProfessor() {
                             </div>
 
                             <button type="submit" className="mt-4 bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition shadow-md">
-                                Salvar e Publicar Prova
+                                Salvar e Publicar para a Turma
                             </button>
                         </form>
                     </div>
