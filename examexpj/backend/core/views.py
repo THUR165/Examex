@@ -61,6 +61,13 @@ class TurmaListView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         serializer.save(professor=self.request.user)
 
+class TurmaDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = TurmaSerializer
+
+    def get_queryset(self):
+        return Turma.objects.filter(professor=self.request.user)
+
 class AlunoListView(generics.ListAPIView):
     permission_classes = [IsProfessorOrReadOnly]
     serializer_class = AlunoSerializer # O serializer que acabámos de criar
