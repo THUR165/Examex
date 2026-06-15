@@ -25,18 +25,18 @@ class GeracaoAleatoriaStrategy(GeracaoSimuladoStrategy):
 # --- NOVA ESTRATÉGIA ADICIONADA ---
 class MontagemManualStrategy(GeracaoSimuladoStrategy):
     def gerar(self, aluno, **kwargs):
-        # Recebemos os IDs exatos e o título que o professor escolheu no React
         questoes_ids = kwargs.get('questoes_ids', [])
         titulo = kwargs.get('titulo', "Prova Oficial")
-        
-        # Busca no banco apenas as questões selecionadas
+        turma = kwargs.get('turma')
+
         questoes = Questao.objects.filter(id__in=questoes_ids)
-        
+
         simulado = Simulado.objects.create(
             aluno=aluno,
-            titulo=titulo
+            titulo=titulo,
+            turma=turma
         )
-        
+
         simulado.questoes.set(questoes)
         return simulado
 

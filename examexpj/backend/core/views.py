@@ -3,8 +3,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
-from .models import Questao, Simulado, Alternativa, RespostaAluno, Usuario
-from .serializers import QuestaoSerializer, SimuladoSerializer, CustomTokenObtainPairSerializer
+from .models import Questao, Simulado, Alternativa, RespostaAluno, Usuario, Turma
+from .serializers import QuestaoSerializer, SimuladoSerializer, CustomTokenObtainPairSerializer, TurmaSerializer
 from .permissions import IsProfessorOrReadOnly
 from django.shortcuts import get_object_or_404
 from .services import MotorDeSimulados, GeracaoAleatoriaStrategy, MontagemManualStrategy
@@ -34,27 +34,48 @@ class GerarSimuladoView(APIView):
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
+
+class TurmaListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = TurmaSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_professor:
+            return Turma.objects.filter(professor=user)
+        return Turma.objects.filter(alunos=user)
+
+
 class MontarProvaManualView(APIView):
     permission_classes = [IsProfessorOrReadOnly]
 
     def post(self, request):
         titulo = request.data.get('titulo')
         questoes_ids = request.data.get('questoes_ids', [])
+        turma_id = request.data.get('turma_id')
 
         if not questoes_ids:
             return Response({"erro": "Selecione ao menos uma questão."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not turma_id:
+            return Response({"erro": "Selecione uma turma para publicar a prova."}, status=status.HTTP_400_BAD_REQUEST)
+
+        turma = get_object_or_404(Turma, pk=turma_id, professor=request.user)
 
         motor = MotorDeSimulados(MontagemManualStrategy())
-        alunos = Usuario.objects.filter(is_aluno=True)
+        alunos = turma.alunos.all()
         
         for aluno in alunos:
             motor.criar_prova(
                 aluno=aluno, 
                 titulo=titulo, 
-                questoes_ids=questoes_ids
+                questoes_ids=questoes_ids,
+                turma=turma
             )
 
-        return Response({"mensagem": f"Prova distribuída para {alunos.count()} alunos!"}, status=status.HTTP_201_CREATED)
+        return Response({
+            "mensagem": f"Prova distribuída com sucesso para {alunos.count()} alunos da turma {turma.nome}!"
+        }, status=status.HTTP_201_CREATED)
 
 
 class AlunoSimuladosListView(generics.ListAPIView):
@@ -69,7 +90,6 @@ class FinalizarSimuladoView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        # Busca o simulado garantindo que pertence ao aluno logado
         simulado = get_object_or_404(Simulado, pk=pk, aluno=request.user)
         
         if simulado.finalizado:
